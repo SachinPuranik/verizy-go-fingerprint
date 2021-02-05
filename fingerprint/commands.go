@@ -154,22 +154,6 @@ func getPayloadForGenerateRandomNumber() []byte {
 
 }
 
-type searchImageStruc struct {
-	PayLoadType   int `struc:"int8,big"`
-	CharBufferNo  int `struc:"int8,big"`
-	StartPos      int `struc:"int16,big"`
-	TemplateCount int `struc:"int16,big"`
-}
-
-func getPayloadForSearchImage(charBufferNo int, startPos int, count int) []byte {
-	pl := &searchImageStruc{}
-	pl.PayLoadType = FINGERPRINT_SEARCHTEMPLATE
-	pl.CharBufferNo = charBufferNo
-	pl.StartPos = startPos
-	pl.TemplateCount = count
-	return strucToBytes(pl)
-}
-
 type complexPayloadStruc8N32 struct {
 	PayLoadType uint `struc:"uint8,big"`
 	DataValue   uint `struc:"uint32,big"`
@@ -222,6 +206,29 @@ func getPayloadForDownloadCharacteristics(CharBufferNo int) []byte {
 	return strucToBytes(cpl)
 }
 
+func getPayloadForUploadCharacteristics(CharBufferNo int) []byte {
+	cpl := &complexPayloadStruc8N8{}
+	cpl.PayLoadType = FINGERPRINT_UPLOADCHARACTERISTICS
+	cpl.DataValue = CharBufferNo
+	return strucToBytes(cpl)
+}
+
+type searchImageStruc struct {
+	PayLoadType   int `struc:"int8,big"`
+	CharBufferNo  int `struc:"int8,big"`
+	StartPos      int `struc:"int16,big"`
+	TemplateCount int `struc:"int16,big"`
+}
+
+func getPayloadForSearchImage(charBufferNo int, startPos int, count int) []byte {
+	pl := &searchImageStruc{}
+	pl.PayLoadType = FINGERPRINT_SEARCHTEMPLATE
+	pl.CharBufferNo = charBufferNo
+	pl.StartPos = startPos
+	pl.TemplateCount = count
+	return strucToBytes(pl)
+}
+
 type storeTemplateSturc struct {
 	PayLoadType    int `struc:"int8,big"`
 	PositionNumber int `struc:"int16,big"`
@@ -260,11 +267,11 @@ type deleteTemplateStruc struct {
 	Count          int `struc:"int16,big"`
 }
 
-func getPayloadForDeleteTemplate(Position int, cnt int) []byte {
+func getPayloadForDeleteTemplate(Position int, count int) []byte {
 	pl := &deleteTemplateStruc{}
 	pl.PayLoadType = FINGERPRINT_DELETETEMPLATE
 	pl.PositionNumber = Position
-	pl.Count = cnt
+	pl.Count = count
 	return strucToBytes(pl)
 
 }
