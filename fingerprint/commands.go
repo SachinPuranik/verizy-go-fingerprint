@@ -108,40 +108,19 @@ func getPayloadForSystemParams() []byte {
 	return strucToBytes(pl)
 }
 
-// passwordStruc -
-type passwordStruc struct {
-	PayLoadType uint `struc:"int8,big"`
-	Password    uint `struc:"int32,big"`
-}
-
-func getPayloadForVerifyPassword(pwd uint) []byte {
-	pl := &passwordStruc{}
-	pl.PayLoadType = FINGERPRINT_VERIFYPASSWORD
-	pl.Password = pwd
-	return strucToBytes(pl)
-
-}
-
-func getPayloadForSetPassword(pwd uint) []byte {
-	pl := &passwordStruc{}
-	pl.PayLoadType = FINGERPRINT_SETPASSWORD
-	pl.Password = pwd
-	return strucToBytes(pl)
-}
-
-func createTemplatePayload() []byte {
+func getPayloadForCreateTemplate() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_CREATETEMPLATE
 	return strucToBytes(pl)
 }
 
-func getTemplateCountPayload() []byte {
+func getPayloadForTemplateCount() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_READIMAGE
 	return strucToBytes(pl)
 }
 
-func readImagePayload() []byte {
+func getPayloadForReadImage() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_READIMAGE
 	return strucToBytes(pl)
@@ -153,26 +132,26 @@ type templateIndexStruc struct {
 	Page        int `struc:"int8,big"`
 }
 
-func templateIndexPayload(page int) []byte {
+func getPayloadForTemplateIndex(page int) []byte {
 	pl := &templateIndexStruc{}
 	pl.PayLoadType = FINGERPRINT_TEMPLATEINDEX
 	pl.Page = page
 	return strucToBytes(pl)
 }
 
-func downloadImagePayload() []byte {
+func getPayloadForDownloadImage() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_DOWNLOADIMAGE
 	return strucToBytes(pl)
 }
 
-func clearDatabasePayload() []byte {
+func getPayloadForClearDatabase() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_CLEARDATABASE
 	return strucToBytes(pl)
 }
 
-func compareCharacteristicsPayload() []byte {
+func getPayloadForCompareCharacteristics() []byte {
 
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_COMPARECHARACTERISTICS
@@ -180,7 +159,7 @@ func compareCharacteristicsPayload() []byte {
 
 }
 
-func generateRandomNumberPayload() []byte {
+func getPayloadForGenerateRandomNumber() []byte {
 
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_GENERATERANDOMNUMBER
@@ -195,7 +174,7 @@ type searchImageStruc struct {
 	TemplateCount int `struc:"int16,big"`
 }
 
-func searchImagePayload(charBufferNo int, startPos int, count int) []byte {
+func getPayloadForSearchImage(charBufferNo int, startPos int, count int) []byte {
 	pl := &searchImageStruc{}
 	pl.PayLoadType = FINGERPRINT_SEARCHTEMPLATE
 	pl.CharBufferNo = charBufferNo
@@ -204,28 +183,49 @@ func searchImagePayload(charBufferNo int, startPos int, count int) []byte {
 	return strucToBytes(pl)
 }
 
-type setAddressStruc struct {
+type complexPayloadStruc8N32 struct {
+	PayLoadType uint `struc:"uint8,big"`
+	DataValue   uint `struc:"uint32,big"`
+}
+
+func getPayloadForVerifyPassword(password uint) []byte {
+	cpl := &complexPayloadStruc8N32{}
+	cpl.PayLoadType = FINGERPRINT_VERIFYPASSWORD
+	cpl.DataValue = password
+	return strucToBytes(cpl)
+}
+
+func getPayloadForSetPassword(password uint) []byte {
+	cpl := &complexPayloadStruc8N32{}
+	cpl.PayLoadType = FINGERPRINT_SETPASSWORD
+	cpl.DataValue = password
+	return strucToBytes(cpl)
+}
+
+func getPayloadForSetAddress(newAddress uint) []byte {
+	cpl := &complexPayloadStruc8N32{}
+	cpl.PayLoadType = FINGERPRINT_SETADDRESS
+	cpl.DataValue = newAddress
+	return strucToBytes(cpl)
+}
+
+type complexPayloadStruc8N8 struct {
 	PayLoadType int `struc:"int8,big"`
-	NewAddress  int `struc:"int32,big"`
+	DataValue   int `struc:"int8,big"`
 }
 
-func setAddressPayload(adds int) []byte {
-	pl := &setAddressStruc{}
-	pl.PayLoadType = FINGERPRINT_SETADDRESS
-	pl.NewAddress = adds
-	return strucToBytes(pl)
+func getPayloadForConvertImage(charBufferNo int) []byte {
+	cpl := &complexPayloadStruc8N8{}
+	cpl.PayLoadType = FINGERPRINT_CONVERTIMAGE
+	cpl.DataValue = charBufferNo
+	return strucToBytes(cpl)
 }
 
-type convertImageStruc struct {
-	PayLoadType  int `struc:"int8,big"`
-	CharBufferNo int `struc:"int8,big"`
-}
-
-func convertImagePayload(charBufferNo int) []byte {
-	pl := &convertImageStruc{}
-	pl.PayLoadType = FINGERPRINT_CONVERTIMAGE
-	pl.CharBufferNo = charBufferNo
-	return strucToBytes(pl)
+func getPayloadForDownloadCharacteristics(CharBufferNo int) []byte {
+	cpl := &complexPayloadStruc8N8{}
+	cpl.PayLoadType = FINGERPRINT_DOWNLOADCHARACTERISTICS
+	cpl.DataValue = CharBufferNo
+	return strucToBytes(cpl)
 }
 
 type storeTemplateSturc struct {
@@ -234,7 +234,7 @@ type storeTemplateSturc struct {
 	CharBufferNo   int `struc:"int8,big"`
 }
 
-func storeTemplatePayload(Position int, CharBufferNo int) []byte {
+func getPayloadForStoreTemplate(Position int, CharBufferNo int) []byte {
 
 	pl := &storeTemplateSturc{}
 	pl.PayLoadType = FINGERPRINT_STORETEMPLATE
@@ -250,7 +250,7 @@ type loadTemplatestruc struct {
 	PositionNumber int `struc:"int16,big"`
 }
 
-func loadTemplatePayload(Position int, CharBufferNo int) []byte {
+func getPayloadForLoadTemplate(Position int, CharBufferNo int) []byte {
 
 	pl := &loadTemplatestruc{}
 	pl.PayLoadType = FINGERPRINT_LOADTEMPLATE
@@ -266,7 +266,7 @@ type deleteTemplateStruc struct {
 	Count          int `struc:"int16,big"`
 }
 
-func deleteTemplatePayload(Position int, cnt int) []byte {
+func getPayloadForDeleteTemplate(Position int, cnt int) []byte {
 	pl := &deleteTemplateStruc{}
 	pl.PayLoadType = FINGERPRINT_DELETETEMPLATE
 	pl.PositionNumber = Position
@@ -275,34 +275,8 @@ func deleteTemplatePayload(Position int, cnt int) []byte {
 
 }
 
-type downloadCharacteristicsStruc struct {
-	PayLoadType  int `struc:"int8,big"`
-	CharBufferNo int `struc:"int8,big"`
-}
-
-func downloadCharacteristicsPayload(CharBufferNo int) []byte {
-	pl := &downloadCharacteristicsStruc{}
-	pl.PayLoadType = FINGERPRINT_DOWNLOADCHARACTERISTICS
-	pl.CharBufferNo = CharBufferNo
-
-	return strucToBytes(pl)
-
-}
-
-type setPasswordStruc struct {
-	PayLoadType int `struc:"int8,big"`
-	NEWPassword int `struc:"int32,big"`
-}
-
-func setPasswordPayload(pass int) []byte {
-	pl := &setPasswordStruc{}
-	pl.PayLoadType = FINGERPRINT_SETPASSWORD
-	pl.NEWPassword = pass
-	return strucToBytes(pl)
-
-}
-
-func checkUnpack(payLoad []byte) {
+//testUnpack - This is test function to be removed.
+func testUnpack(payLoad []byte) {
 	b := bytes.NewBuffer(payLoad)
 	o := &searchImageStruc{}
 	struc.Unpack(b, o)

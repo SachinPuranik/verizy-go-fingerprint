@@ -274,7 +274,6 @@ func anyCommonErrors(tp *ThumbPacket) (bool, error) {
 	} else if receivedPacketPayload[0] == FINGERPRINT_ERROR_INVALIDREGISTER {
 		err = errors.New("Invalid register number")
 	} else {
-		// err = fmt.Errorf("Unknown error %x" + receivedPacketPayload[0])
 		err = errors.New("Unknownon error occured")
 	}
 
@@ -360,7 +359,6 @@ func (s *scanner) GetSystemParameters() (*SystemParameters, error) {
 		log.Printf(err.Error())
 		return nil, err
 	}
-	fmt.Println([]byte(tp.PayLoad))
 	sp := &SystemParameters{}
 	if err = decodePayload(sp, []byte(tp.PayLoad)); err != nil {
 		sp = nil
