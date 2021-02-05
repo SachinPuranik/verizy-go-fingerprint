@@ -126,19 +126,6 @@ func getPayloadForReadImage() []byte {
 	return strucToBytes(pl)
 }
 
-//get templateIndex
-type templateIndexStruc struct {
-	PayLoadType int `struc:"int8,big"`
-	Page        int `struc:"int8,big"`
-}
-
-func getPayloadForTemplateIndex(page int) []byte {
-	pl := &templateIndexStruc{}
-	pl.PayLoadType = FINGERPRINT_TEMPLATEINDEX
-	pl.Page = page
-	return strucToBytes(pl)
-}
-
 func getPayloadForDownloadImage() []byte {
 	pl := &simplePayLoadStruc{}
 	pl.PayLoadType = FINGERPRINT_DOWNLOADIMAGE
@@ -212,6 +199,13 @@ func getPayloadForSetAddress(newAddress uint) []byte {
 type complexPayloadStruc8N8 struct {
 	PayLoadType int `struc:"int8,big"`
 	DataValue   int `struc:"int8,big"`
+}
+
+func getPayloadForTemplateIndex(page int) []byte {
+	cpl := &complexPayloadStruc8N8{}
+	cpl.PayLoadType = FINGERPRINT_TEMPLATEINDEX
+	cpl.DataValue = page
+	return strucToBytes(cpl)
 }
 
 func getPayloadForConvertImage(charBufferNo int) []byte {
