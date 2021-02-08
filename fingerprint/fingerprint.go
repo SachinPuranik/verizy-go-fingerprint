@@ -42,6 +42,7 @@ type ScannerIO interface {
 	Release()
 	VerifyPassword() bool
 	GetSystemParameters() (*SystemParameters, error)
+	ReadImage() bool
 }
 
 // func getDefaultSerialCfg() *serial.Config {
@@ -364,4 +365,25 @@ func (s *scanner) GetSystemParameters() (*SystemParameters, error) {
 		sp = nil
 	}
 	return sp, err
+}
+
+func (s *scanner) ReadImage() bool {
+	var ret bool
+	ret = true
+	payLoad := getPayloadForReadImage()
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		ret = false
+	}
+
+	tp, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+	}
+
+	if b, err := anyCommonErrors(tp); b == true {
+		log.Printf(err.Error())
+		ret = b
+	}
+	return ret
 }
