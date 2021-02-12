@@ -34,6 +34,7 @@ type scanner struct {
 	mySerial
 	useSerial bool
 	password  uint
+	debug     bool
 }
 
 //ScannerIO - Interface for Scanner
@@ -188,7 +189,9 @@ func (s *scanner) writeUSB(payLoad []byte) (int, error) {
 
 func (s *scanner) writePacket(packetType int, payLoad []byte) (numBytes int, err error) {
 	packet := buildCommandPacket(packetType, payLoad)
-	fmt.Println("Final Packet: ", packet)
+	if s.debug == true {
+		fmt.Println("Final Packet: ", packet)
+	}
 	if s.useSerial == true {
 		numBytes, err = s.writeSerial(packet)
 	} else {
@@ -254,7 +257,9 @@ func (s *scanner) readPacket() (*ThumbPacket, error) {
 		}
 		continueRead = false
 	}
-	fmt.Println("Final Received Packet: ", buf)
+	if s.debug == true {
+		fmt.Println("Final Received Packet: ", buf)
+	}
 	err = verifyChecksum(tp)
 	return tp, err
 }
