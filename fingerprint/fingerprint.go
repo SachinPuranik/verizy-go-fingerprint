@@ -43,6 +43,8 @@ type ScannerIO interface {
 	VerifyPassword() bool
 	GetSystemParameters() (*SystemParameters, error)
 	ReadImage() bool
+	ConvertImage(charBufferNo int) bool
+	SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error)
 }
 
 // func getDefaultSerialCfg() *serial.Config {
@@ -186,6 +188,7 @@ func (s *scanner) writeUSB(payLoad []byte) (int, error) {
 
 func (s *scanner) writePacket(packetType int, payLoad []byte) (numBytes int, err error) {
 	packet := buildCommandPacket(packetType, payLoad)
+	fmt.Println("Final Packet: ", packet)
 	if s.useSerial == true {
 		numBytes, err = s.writeSerial(packet)
 	} else {
@@ -201,6 +204,7 @@ func (s *scanner) readFragementOnSerial(readSize int) ([]byte, int, error) {
 	if err != nil {
 		log.Printf("Error reading Serial Port =>%s\n", err.Error())
 		readBytes = -1
+		buf = nil
 	}
 	return buf, readBytes, err
 }
@@ -232,11 +236,10 @@ func (s *scanner) readPacket() (*ThumbPacket, error) {
 		} else {
 			frag, readBytes, err = s.readFragementOnUSB(maxReadSize)
 		}
-		// if buf == nil {
-		// 	buf = frag
-		// } else {
-		buf = append(buf, frag[:readBytes]...)
-		// }
+
+		if readBytes > 0 {
+			buf = append(buf, frag[:readBytes]...)
+		}
 
 		if len(buf) < SMALLEST_RESPONSE_PACKET_SIZE {
 			continue
@@ -251,38 +254,49 @@ func (s *scanner) readPacket() (*ThumbPacket, error) {
 		}
 		continueRead = false
 	}
+	fmt.Println("Final Received Packet: ", buf)
 	err = verifyChecksum(tp)
 	return tp, err
 }
 
-func anyCommonErrors(tp *ThumbPacket) (bool, error) {
-	var err error
-	var op bool
+func anyCommonErrors(tp *ThumbPacket) (errorFound bool, errorCode int, errDesc error) {
 
-	op = true
-	err = nil
+	errorFound = false
+	errDesc = nil
 
 	if tp.PacketType != FINGERPRINT_ACKPACKET {
-		err = errors.New("the received packet is no ack packet")
+		errDesc = errors.New("the received packet is no ack packet")
 	}
 
 	receivedPacketPayload := []byte(tp.PayLoad)
+	errorCode = int(receivedPacketPayload[0])
 
-	if receivedPacketPayload[0] == FINGERPRINT_OK && err == nil {
-		op = false
-	} else if receivedPacketPayload[0] == FINGERPRINT_ERROR_COMMUNICATION {
-		err = errors.New("Communication error")
-	} else if receivedPacketPayload[0] == FINGERPRINT_ERROR_INVALIDREGISTER {
-		err = errors.New("Invalid register number")
+	if errorCode == FINGERPRINT_OK && errDesc == nil {
+		errorFound = false
+		errDesc = nil
+	} else if errorCode == FINGERPRINT_ERROR_COMMUNICATION {
+		errDesc = errors.New("Communication error")
+	} else if errorCode == FINGERPRINT_ERROR_INVALIDREGISTER {
+		errDesc = errors.New("Invalid register number")
+	} else if errorCode == FINGERPRINT_ERROR_MESSYIMAGE {
+		errDesc = errors.New("The image is too messy")
+	} else if errorCode == FINGERPRINT_ERROR_FEWFEATUREPOINTS {
+		errDesc = errors.New("The image contains too few feature points")
+	} else if errorCode == FINGERPRINT_ERROR_INVALIDIMAGE {
+		errDesc = errors.New("The image is invalid")
+	} else if errorCode == FINGERPRINT_ERROR_NOTEMPLATEFOUND {
+		errorFound = false
+		errDesc = nil
+	} else if errorCode == FINGERPRINT_ERROR_NOFINGER {
+		errorFound = false
+		errDesc = nil
 	} else {
-		err = errors.New("Unknownon error occured")
+		errDesc = errors.New("Unknownon error occured")
 	}
-
-	return op, err
+	return errorFound, errorCode, errDesc
 }
 
-func (s *scanner) VerifyPassword() bool {
-	var ret bool
+func (s *scanner) VerifyPassword() (ret bool) {
 	ret = true
 	payLoad := getPayloadForVerifyPassword(s.password)
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
@@ -293,17 +307,16 @@ func (s *scanner) VerifyPassword() bool {
 	if errRead != nil {
 		//Handle packet read error
 	}
-	if b, err := anyCommonErrors(tp); b == true {
-		log.Printf(err.Error())
-		ret = b
+	if errorFound, _, errDesc := anyCommonErrors(tp); errDesc != nil {
+		log.Printf(errDesc.Error())
+		ret = !errorFound
 	}
 	return ret
 }
 
-func (s *scanner) SetPassword(password uint) bool {
-	var ret bool
-	ret = true
+func (s *scanner) SetPassword(password uint) (ret bool) {
 
+	ret = true
 	s.password = password
 
 	payLoad := getPayloadForSetPassword(s.password)
@@ -315,9 +328,9 @@ func (s *scanner) SetPassword(password uint) bool {
 	if errRead != nil {
 		//Handle packet read error
 	}
-	if b, err := anyCommonErrors(tp); b == true {
-		log.Printf(err.Error())
-		ret = b
+	if errorFound, _, errDesc := anyCommonErrors(tp); errDesc != nil {
+		log.Printf(errDesc.Error())
+		ret = !errorFound
 	}
 	return ret
 }
@@ -356,19 +369,18 @@ func (s *scanner) GetSystemParameters() (*SystemParameters, error) {
 	if errRead != nil {
 		return nil, errRead
 	}
-	if b, err := anyCommonErrors(tp); b == true {
+	if _, _, errDesc := anyCommonErrors(tp); errDesc != nil {
 		log.Printf(err.Error())
-		return nil, err
+		return nil, errDesc
 	}
-	sp := &SystemParameters{}
-	if err = decodePayload(sp, []byte(tp.PayLoad)); err != nil {
-		sp = nil
+	result := &SystemParameters{}
+	if err = decodePayload(result, []byte(tp.PayLoad)); err != nil {
+		result = nil
 	}
-	return sp, err
+	return result, err
 }
 
-func (s *scanner) ReadImage() bool {
-	var ret bool
+func (s *scanner) ReadImage() (ret bool) {
 	ret = true
 	payLoad := getPayloadForReadImage()
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
@@ -381,9 +393,89 @@ func (s *scanner) ReadImage() bool {
 		//Handle packet read error
 	}
 
-	if b, err := anyCommonErrors(tp); b == true {
-		log.Printf(err.Error())
-		ret = b
+	var errorFound bool
+	var errorCode int
+	var errDesc error
+
+	if errorFound, errorCode, errDesc = anyCommonErrors(tp); errDesc != nil {
+		log.Printf(errDesc.Error())
+		ret = !errorFound
+	}
+	if errorCode == FINGERPRINT_ERROR_NOFINGER {
+		ret = false
 	}
 	return ret
+}
+
+func (s *scanner) ConvertImage(charBufferNo int) bool {
+	var ret bool
+	ret = true
+	payLoad := getPayloadForConvertImage(charBufferNo)
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		ret = false
+	}
+
+	tp, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+	}
+
+	if errorFound, _, errDesc := anyCommonErrors(tp); errDesc != nil {
+		log.Printf(errDesc.Error())
+		ret = !errorFound
+	}
+	return ret
+}
+
+//SearchResult -
+type SearchResult struct {
+	PositionNumber int `struc:"uint16,big"`
+	AccuracyScore  int `struc:"uint16,big"`
+}
+
+func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error) {
+	var err error
+
+	if charBufferNo != FINGERPRINT_CHARBUFFER1 && charBufferNo != FINGERPRINT_CHARBUFFER2 {
+		err = errors.New("the given charbuffer number is invalid")
+		return nil, err
+	}
+
+	templatesCount := 0
+	if count > 0 {
+		templatesCount = count
+	} else {
+		templatesCount = 1000 //self.getStorageCapacity()
+	}
+
+	payLoad := getPayloadForSearchImage(charBufferNo, startPos, templatesCount)
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return nil, errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		return nil, errRead
+	}
+	var errorFound bool
+	var errorCode int
+	var errDesc error
+
+	if errorFound, errorCode, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
+		log.Printf(errDesc.Error())
+		return nil, err
+	}
+
+	result := &SearchResult{-1, -1}
+
+	if errorFound == false && errorCode == FINGERPRINT_ERROR_NOTEMPLATEFOUND {
+		return result, errDesc
+	}
+
+	if err = decodePayload(result, []byte(responsePacket.PayLoad)); err != nil {
+		result = nil
+	}
+	return result, err
 }
