@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/sachin-puranik/verizy-go-fingerprint/fingerprint"
+	"github.com/SachinPuranik/verizy-go-fingerprint/fingerprint"
 	"github.com/tarm/serial"
 	//"github.com/tarm/serial"
 )
@@ -31,9 +31,11 @@ func main() {
 		fmt.Println("1 - Verify Password")
 		fmt.Println("2 - System Params")
 		fmt.Println("3 - Search")
+		fmt.Println("4 - Enroll")
 		fmt.Println("9 - Exit")
-
+		//choice = 4
 		switch fmt.Scan(&choice); choice {
+		//switch choice {
 		case 1:
 			if scanner.VerifyPassword() == true {
 				log.Println("Password verified")
@@ -49,6 +51,8 @@ func main() {
 		case 3:
 			//Place holder for Enroll Function
 			Search(scanner)
+		case 4:
+			Enroll(scanner)
 		case 9:
 			breakMe = true
 			fmt.Println("Stoping the program - with Exit Option")
@@ -69,7 +73,52 @@ func Search(scanner fingerprint.ScannerIO) {
 	}
 
 	scanner.ConvertImage(fingerprint.FINGERPRINT_CHARBUFFER1)
+	result, err := scanner.SearchTemplate(fingerprint.FINGERPRINT_CHARBUFFER1, 0, -1)
+	if err == nil {
+		log.Printf("PositionNumber : %d, AccuracyScore: %d\n", result.PositionNumber, result.AccuracyScore)
+	} else {
+		log.Printf(err.Error())
+	}
+
+}
+
+//Enroll -
+func Enroll(scanner fingerprint.ScannerIO) {
+	log.Println("R307 : Waiting for finger...")
+
+	for scanner.ReadImage() == false {
+		log.Println("R307 : Still waiting for finger...")
+	}
+
+	scanner.ConvertImage(fingerprint.FINGERPRINT_CHARBUFFER1)
 	result, _ := scanner.SearchTemplate(fingerprint.FINGERPRINT_CHARBUFFER1, 0, -1)
-	log.Printf("PositionNumber : %d, AccuracyScore: %d", result.PositionNumber, result.AccuracyScore)
+
+	if result.PositionNumber >= 0 {
+		log.Println("Template already exists at position #", result.PositionNumber)
+		return
+	}
+	log.Println("Remove and keep the finger again")
+	time.Sleep(2 * time.Second)
+
+	for scanner.ReadImage() == false {
+		log.Println("R307 : Still waiting for finger...")
+	}
+	scanner.ConvertImage(fingerprint.FINGERPRINT_CHARBUFFER2)
+
+	accuracyScore, err := scanner.CompareCharacteristics()
+	if accuracyScore == 0 {
+		log.Printf("Fingers do not match")
+		return
+	}
+
+	err = scanner.CreateTemplate()
+	newPosition := -1
+	newPosition, err = scanner.StoreTemplate(newPosition, fingerprint.FINGERPRINT_CHARBUFFER1)
+	if err != nil {
+		log.Printf("Unable to store template")
+		return
+	}
+
+	log.Println("finger enrolled successfully. New template position #", newPosition)
 
 }

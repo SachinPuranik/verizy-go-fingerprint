@@ -231,16 +231,16 @@ func getPayloadForSearchImage(charBufferNo int, startPos int, count int) []byte 
 
 type storeTemplateSturc struct {
 	PayLoadType    int `struc:"int8,big"`
-	PositionNumber int `struc:"int16,big"`
 	CharBufferNo   int `struc:"int8,big"`
+	PositionNumber int `struc:"int16,big"`
 }
 
 func getPayloadForStoreTemplate(Position int, CharBufferNo int) []byte {
 
 	pl := &storeTemplateSturc{}
 	pl.PayLoadType = FINGERPRINT_STORETEMPLATE
-	pl.PositionNumber = Position
 	pl.CharBufferNo = CharBufferNo
+	pl.PositionNumber = Position
 	return strucToBytes(pl)
 
 }

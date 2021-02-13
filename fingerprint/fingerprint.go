@@ -35,6 +35,7 @@ type scanner struct {
 	useSerial bool
 	password  uint
 	debug     bool
+	param     *SystemParameters
 }
 
 //ScannerIO - Interface for Scanner
@@ -46,6 +47,9 @@ type ScannerIO interface {
 	ReadImage() bool
 	ConvertImage(charBufferNo int) bool
 	SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error)
+	CompareCharacteristics() (int, error)
+	CreateTemplate() error
+	StoreTemplate(Position int, CharBufferNo int) (int, error)
 }
 
 // func getDefaultSerialCfg() *serial.Config {
@@ -145,6 +149,9 @@ func (s *scanner) Capture() (err error) {
 	} else {
 		err = s.captureUSB()
 	}
+	if err == nil {
+		s.param, err = s.GetSystemParameters()
+	}
 	return err
 }
 
@@ -166,6 +173,10 @@ func (s *scanner) Release() {
 	} else {
 		s.releaseUSB()
 	}
+}
+
+func (s *scanner) getStorageCapacity() int {
+	return int(s.param.StorageCapacity)
 }
 
 func (s *scanner) writeSerial(payLoad []byte) (int, error) {
@@ -266,7 +277,7 @@ func (s *scanner) readPacket() (*ThumbPacket, error) {
 
 func anyCommonErrors(tp *ThumbPacket) (errorFound bool, errorCode int, errDesc error) {
 
-	errorFound = false
+	errorFound = true //Yes there is error
 	errDesc = nil
 
 	if tp.PacketType != FINGERPRINT_ACKPACKET {
@@ -289,6 +300,10 @@ func anyCommonErrors(tp *ThumbPacket) (errorFound bool, errorCode int, errDesc e
 		errDesc = errors.New("The image contains too few feature points")
 	} else if errorCode == FINGERPRINT_ERROR_INVALIDIMAGE {
 		errDesc = errors.New("The image is invalid")
+	} else if errorCode == FINGERPRINT_ERROR_CHARACTERISTICSMISMATCH {
+		errDesc = errors.New("characteristics mismatch")
+	} else if errorCode == FINGERPRINT_ERROR_NOTMATCHING {
+		errDesc = errors.New("Fingerprint do not mismatch")
 	} else if errorCode == FINGERPRINT_ERROR_NOTEMPLATEFOUND {
 		errorFound = false
 		errDesc = nil
@@ -441,6 +456,9 @@ type SearchResult struct {
 
 func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error) {
 	var err error
+	var errorFound bool
+	var errorCode int
+	var errDesc error
 
 	if charBufferNo != FINGERPRINT_CHARBUFFER1 && charBufferNo != FINGERPRINT_CHARBUFFER2 {
 		err = errors.New("the given charbuffer number is invalid")
@@ -451,7 +469,7 @@ func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*Se
 	if count > 0 {
 		templatesCount = count
 	} else {
-		templatesCount = 1000 //self.getStorageCapacity()
+		templatesCount = s.getStorageCapacity()
 	}
 
 	payLoad := getPayloadForSearchImage(charBufferNo, startPos, templatesCount)
@@ -464,9 +482,6 @@ func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*Se
 	if errRead != nil {
 		return nil, errRead
 	}
-	var errorFound bool
-	var errorCode int
-	var errDesc error
 
 	if errorFound, errorCode, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
 		log.Printf(errDesc.Error())
@@ -483,4 +498,152 @@ func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*Se
 		result = nil
 	}
 	return result, err
+}
+
+//Accuracy -
+type Accuracy struct {
+	Score int `struc:"uint16,big"`
+}
+
+func (s *scanner) CompareCharacteristics() (int, error) {
+	// var errorFound bool
+	// var errorCode int
+	var errDesc error
+
+	payLoad := getPayloadForCompareCharacteristics()
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return 0, errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+		return 0, errRead
+	}
+
+	//if errorFound, errorCode, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
+	if _, _, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
+		return 0, errDesc
+	}
+
+	// if errorFound == false && errorCode == FINGERPRINT_ERROR_NOTMATCHING {
+	// 	return result, nil
+	// }
+	result := &Accuracy{}
+	if errDesc = decodePayload(result, []byte(responsePacket.PayLoad)); errDesc != nil {
+		result.Score = 0
+	}
+	return result.Score, errDesc
+}
+
+func (s *scanner) CreateTemplate() error {
+
+	payLoad := getPayloadForCreateTemplate()
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+		return errRead
+	}
+
+	if _, _, errDesc := anyCommonErrors(responsePacket); errDesc != nil {
+		log.Printf(errDesc.Error())
+		return errDesc
+	}
+
+	return nil
+}
+
+func (s *scanner) getFreePosition() int {
+	freePosition := -1
+
+	for page := 0; page <= 3; page++ {
+		if freePosition >= 0 {
+			break
+		}
+		templateIndex, err := s.getTemplateIndex(page)
+		if err != nil {
+			return freePosition
+		}
+		for index := range templateIndex {
+			if templateIndex[index] == false {
+				freePosition = (len(templateIndex) * page) + index
+				break
+			}
+		}
+	}
+	return freePosition
+}
+
+//StoreTemplate -
+func (s *scanner) StoreTemplate(Position int, CharBufferNo int) (int, error) {
+
+	if Position == -1 {
+		Position = s.getFreePosition()
+	}
+
+	if Position < 0x0000 || Position >= s.getStorageCapacity() {
+		return -1, errors.New("The given position number is invalid")
+	}
+
+	if CharBufferNo != FINGERPRINT_CHARBUFFER1 && CharBufferNo != FINGERPRINT_CHARBUFFER2 {
+		return -1, errors.New("the given char buffer number is invalid")
+	}
+
+	payLoad := getPayloadForStoreTemplate(Position, CharBufferNo)
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return -1, errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+		return -1, errRead
+	}
+
+	if _, _, errDesc := anyCommonErrors(responsePacket); errDesc != nil {
+		log.Printf(errDesc.Error())
+		return -1, errDesc
+	}
+
+	return Position, nil
+}
+
+func (s *scanner) getTemplateIndex(page int) ([]bool, error) {
+
+	templateIndex := make([]bool, 0)
+
+	payLoad := getPayloadForTemplateIndex(page)
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return nil, errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+		return nil, errRead
+	}
+
+	if _, _, errDesc := anyCommonErrors(responsePacket); errDesc != nil {
+		log.Printf(errDesc.Error())
+		return nil, errDesc
+	}
+
+	pageElements := []byte(responsePacket.PayLoad)[1:]
+
+	for _, pageElement := range pageElements {
+		for b := 0; b <= 7; b++ {
+			positionIsUsed := (pageElement & (0x01 << b)) != 0
+			templateIndex = append(templateIndex, positionIsUsed)
+		}
+	}
+
+	return templateIndex, nil
 }
