@@ -32,6 +32,7 @@ func main() {
 		fmt.Println("2 - System Params")
 		fmt.Println("3 - Search")
 		fmt.Println("4 - Enroll")
+		fmt.Println("5 - Clear Database")
 		fmt.Println("9 - Exit")
 		//choice = 4
 		switch fmt.Scan(&choice); choice {
@@ -53,6 +54,13 @@ func main() {
 			Search(scanner)
 		case 4:
 			Enroll(scanner)
+		case 5:
+			err := scanner.ClearDatabase()
+			if err != nil{
+				log.Printf(err.Error())
+			}else{
+				log.Printf("database cleared now")
+			}
 		case 9:
 			breakMe = true
 			fmt.Println("Stoping the program - with Exit Option")

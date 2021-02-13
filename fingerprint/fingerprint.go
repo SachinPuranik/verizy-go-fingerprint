@@ -50,6 +50,7 @@ type ScannerIO interface {
 	CompareCharacteristics() (int, error)
 	CreateTemplate() error
 	StoreTemplate(Position int, CharBufferNo int) (int, error)
+	ClearDatabase() error
 }
 
 // func getDefaultSerialCfg() *serial.Config {
@@ -304,6 +305,8 @@ func anyCommonErrors(tp *ThumbPacket) (errorFound bool, errorCode int, errDesc e
 		errDesc = errors.New("characteristics mismatch")
 	} else if errorCode == FINGERPRINT_ERROR_NOTMATCHING {
 		errDesc = errors.New("Fingerprint do not mismatch")
+	} else if errorCode == FINGERPRINT_ERROR_CLEARDATABASE {
+		errDesc = errors.New("Unable to clear database")
 	} else if errorCode == FINGERPRINT_ERROR_NOTEMPLATEFOUND {
 		errorFound = false
 		errDesc = nil
@@ -646,4 +649,26 @@ func (s *scanner) getTemplateIndex(page int) ([]bool, error) {
 	}
 
 	return templateIndex, nil
+}
+
+func (s *scanner) ClearDatabase() error {
+
+	payLoad := getPayloadForClearDatabase()
+	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
+	if errWrite != nil {
+		return errWrite
+	}
+
+	responsePacket, errRead := s.readPacket()
+	if errRead != nil {
+		//Handle packet read error
+		return errRead
+	}
+
+	if _, _, errDesc := anyCommonErrors(responsePacket); errDesc != nil {
+		log.Printf(errDesc.Error())
+		return errDesc
+	}
+
+	return nil
 }
