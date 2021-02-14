@@ -56,9 +56,9 @@ func main() {
 			Enroll(scanner)
 		case 5:
 			err := scanner.ClearDatabase()
-			if err != nil{
+			if err != nil {
 				log.Printf(err.Error())
-			}else{
+			} else {
 				log.Printf("database cleared now")
 			}
 		case 9:
