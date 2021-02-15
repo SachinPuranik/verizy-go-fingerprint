@@ -47,10 +47,10 @@ type ScannerIO interface {
 	ReadImage() bool
 	ConvertImage(charBufferNo int) bool
 	SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error)
-	CompareCharacteristics() (int, error)
 	CreateTemplate() error
 	StoreTemplate(Position int, CharBufferNo int) (int, error)
 	ClearDatabase() error
+	CompareCharacteristics() (int, error)
 }
 
 // func getDefaultSerialCfg() *serial.Config {
@@ -183,7 +183,7 @@ func (s *scanner) getStorageCapacity() int {
 func (s *scanner) writeSerial(payLoad []byte) (int, error) {
 	numBytes, err := s.serialPort.Write(payLoad)
 	if numBytes == 0 {
-		log.Printf("%d.Write(): only %d bytes written, returned error is %v\n", s.serialPort, numBytes, err)
+		// log.Printf("%d.Write(): only %d bytes written, returned error is %v\n", s.serialPort, numBytes, err)
 		return -1, err
 	}
 	return numBytes, err
@@ -509,8 +509,6 @@ type Accuracy struct {
 }
 
 func (s *scanner) CompareCharacteristics() (int, error) {
-	// var errorFound bool
-	// var errorCode int
 	var errDesc error
 
 	payLoad := getPayloadForCompareCharacteristics()
@@ -525,14 +523,10 @@ func (s *scanner) CompareCharacteristics() (int, error) {
 		return 0, errRead
 	}
 
-	//if errorFound, errorCode, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
 	if _, _, errDesc = anyCommonErrors(responsePacket); errDesc != nil {
 		return 0, errDesc
 	}
 
-	// if errorFound == false && errorCode == FINGERPRINT_ERROR_NOTMATCHING {
-	// 	return result, nil
-	// }
 	result := &Accuracy{}
 	if errDesc = decodePayload(result, []byte(responsePacket.PayLoad)); errDesc != nil {
 		result.Score = 0
