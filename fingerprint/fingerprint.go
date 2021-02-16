@@ -12,26 +12,36 @@ import (
 )
 
 type myUSB struct {
-	usbCtxt   *gousb.Context
-	usbDevice *gousb.Device
-	usbConfig *gousb.Config
-	usbIntf   *gousb.Interface
-	epIn      *gousb.InEndpoint
-	epOut     *gousb.OutEndpoint
-
-	vid gousb.ID
-	pid gousb.ID
+	ctxt   *gousb.Context
+	device *gousb.Device
+	config *gousb.Config
+	intf   *gousb.Interface
+	epIn   *gousb.InEndpoint
+	epOut  *gousb.OutEndpoint
+	vid    gousb.ID
+	pid    gousb.ID
 }
 
 type mySerial struct {
-	serialPort *serial.Port
-	serialCfg  *serial.Config
+	port *serial.Port
+	cfg  *serial.Config
 }
 
-//scanner - Scanner struct to hold various data members
-type scanner struct {
-	myUSB
-	mySerial
+//SystemParameters -
+type SystemParameters struct {
+	StatusRegister  uint `struc:"uint16,big"`
+	SystemID        uint `struc:"uint16,big"`
+	StorageCapacity uint `struc:"uint16,big"`
+	SecurityLevel   uint `struc:"uint16,big"`
+	DeviceAddress   uint `struc:"uint32,big"`
+	PacketLength    uint `struc:"uint16,big"`
+	BaudRate        uint `struc:"uint16,big"`
+}
+
+//Scanner - Scanner struct to hold various data members
+type Scanner struct {
+	usb       myUSB
+	serial    mySerial
 	useSerial bool
 	password  uint
 	debug     bool
@@ -57,33 +67,33 @@ type ScannerIO interface {
 // 	return &serial.Config{Name: "/dev/tty.usbserial-1420", Baud: 9600 * 6, ReadTimeout: time.Millisecond * 500}
 // }
 
-//NewSerial - Create scanner with serial connection
-func NewSerial(serialCfg *serial.Config, password uint) ScannerIO {
+//NewSerial - Create Scanner with serial connection
+func NewSerial(serialCfg *serial.Config, password uint) *Scanner {
 	if serialCfg == nil {
 		log.Fatal("Unable to open serial port due to invalid params")
 	}
 
-	s := &scanner{}
-	s.serialCfg = serialCfg
+	s := &Scanner{}
+	s.serial.cfg = serialCfg
 	s.useSerial = true
 	s.password = password
 	return s
 }
 
-//NewUSB - Create scanner with usb connection
-func NewUSB(vid uint16, pid uint16, password uint) ScannerIO {
-	s := &scanner{}
+//NewUSB - Create Scanner with usb connection
+func NewUSB(vid uint16, pid uint16, password uint) *Scanner {
+	s := &Scanner{}
 	// Open any device with a given VID/PID using a convenience function.
-	s.vid = gousb.ID(vid)
-	s.pid = gousb.ID(pid)
+	s.usb.vid = gousb.ID(vid)
+	s.usb.pid = gousb.ID(pid)
 	s.useSerial = false
 	s.password = password
 	return s
 }
 
-func (s *scanner) captureSerial() error {
+func (s *Scanner) captureSerial() error {
 	var err error
-	s.serialPort, err = serial.OpenPort(s.serialCfg)
+	s.serial.port, err = serial.OpenPort(s.serial.cfg)
 	if err != nil {
 		log.Printf(err.Error())
 		return err
@@ -91,59 +101,59 @@ func (s *scanner) captureSerial() error {
 	return nil
 }
 
-func (s *scanner) captureUSB() error {
+func (s *Scanner) captureUSB() error {
 	var err error
-	s.usbCtxt = gousb.NewContext()
-	s.usbDevice, err = s.usbCtxt.OpenDeviceWithVIDPID(s.vid, s.pid)
+	s.usb.ctxt = gousb.NewContext()
+	s.usb.device, err = s.usb.ctxt.OpenDeviceWithVIDPID(s.usb.vid, s.usb.pid)
 	if err != nil {
-		s.usbCtxt.Close()
+		s.usb.ctxt.Close()
 		log.Printf("Could not open a device: %v\n", err)
 		return err
 	}
 
 	// Switch the configuration to #1.
-	s.usbConfig, err = s.usbDevice.Config(1)
+	s.usb.config, err = s.usb.device.Config(1)
 	if err != nil {
-		log.Printf("%s.Config(2): %v", s.usbDevice, err)
-		s.usbDevice.Close()
-		s.usbCtxt.Close()
+		log.Printf("%s.Config(2): %v", s.usb.device, err)
+		s.usb.device.Close()
+		s.usb.ctxt.Close()
 		return err
 	}
 	// In the config #2, claim interface #3 with alt setting #0.
-	s.usbIntf, err = s.usbConfig.Interface(0, 0)
+	s.usb.intf, err = s.usb.config.Interface(0, 0)
 	if err != nil {
-		log.Fatalf("%s.Interface(0, 0): %v", s.usbConfig, err)
-		s.usbConfig.Close()
-		s.usbDevice.Close()
-		s.usbCtxt.Close()
+		log.Fatalf("%s.Interface(0, 0): %v", s.usb.device, err)
+		s.usb.device.Close()
+		s.usb.device.Close()
+		s.usb.ctxt.Close()
 		return err
 	}
 
-	s.epIn, err = s.usbIntf.InEndpoint(2)
+	s.usb.epIn, err = s.usb.intf.InEndpoint(2)
 	if err != nil {
-		log.Fatalf("%s.InEndpoint(2): %v", s.usbIntf, err)
-		s.usbIntf.Close()
-		s.usbConfig.Close()
-		s.usbDevice.Close()
-		s.usbCtxt.Close()
+		log.Fatalf("%s.InEndpoint(2): %v", s.usb.intf, err)
+		s.usb.intf.Close()
+		s.usb.device.Close()
+		s.usb.device.Close()
+		s.usb.ctxt.Close()
 		return err
 	}
 
 	// And in the same interface open endpoint #5 for writing.
-	s.epOut, err = s.usbIntf.OutEndpoint(2)
+	s.usb.epOut, err = s.usb.intf.OutEndpoint(2)
 	if err != nil {
-		log.Fatalf("%s.InEndpoint(2): %v", s.usbIntf, err)
-		s.usbIntf.Close()
-		s.usbConfig.Close()
-		s.usbDevice.Close()
-		s.usbCtxt.Close()
+		log.Fatalf("%s.InEndpoint(2): %v", s.usb.intf, err)
+		s.usb.intf.Close()
+		s.usb.device.Close()
+		s.usb.device.Close()
+		s.usb.ctxt.Close()
 		return nil
 	}
 
 	return nil
 }
 
-func (s *scanner) Capture() (err error) {
+func (s *Scanner) Capture() (err error) {
 
 	if s.useSerial == true {
 		err = s.captureSerial()
@@ -156,19 +166,19 @@ func (s *scanner) Capture() (err error) {
 	return err
 }
 
-func (s *scanner) releaseSerial() {
+func (s *Scanner) releaseSerial() {
 
 }
 
-func (s *scanner) releaseUSB() {
+func (s *Scanner) releaseUSB() {
 
-	s.usbIntf.Close()
-	s.usbConfig.Close()
-	s.usbDevice.Close()
-	s.usbCtxt.Close()
+	s.usb.intf.Close()
+	s.usb.device.Close()
+	s.usb.device.Close()
+	s.usb.ctxt.Close()
 }
 
-func (s *scanner) Release() {
+func (s *Scanner) Release() {
 	if s.useSerial == true {
 		s.releaseSerial()
 	} else {
@@ -176,30 +186,30 @@ func (s *scanner) Release() {
 	}
 }
 
-func (s *scanner) getStorageCapacity() int {
+func (s *Scanner) getStorageCapacity() int {
 	return int(s.param.StorageCapacity)
 }
 
-func (s *scanner) writeSerial(payLoad []byte) (int, error) {
-	numBytes, err := s.serialPort.Write(payLoad)
+func (s *Scanner) writeSerial(payLoad []byte) (int, error) {
+	numBytes, err := s.serial.port.Write(payLoad)
 	if numBytes == 0 {
-		// log.Printf("%d.Write(): only %d bytes written, returned error is %v\n", s.serialPort, numBytes, err)
+		// log.Printf("%d.Write(): only %d bytes written, returned error is %v\n", s.serial.port, numBytes, err)
 		return -1, err
 	}
 	return numBytes, err
 }
 
-func (s *scanner) writeUSB(payLoad []byte) (int, error) {
+func (s *Scanner) writeUSB(payLoad []byte) (int, error) {
 	// Write data to the USB device.
-	numBytes, err := s.epOut.Write(payLoad)
+	numBytes, err := s.usb.epOut.Write(payLoad)
 	if numBytes == 0 {
-		log.Printf("%s.Write([2]): only %d bytes written, returned error is %v\n", s.epOut, numBytes, err)
+		log.Printf("%s.Write([2]): only %d bytes written, returned error is %v\n", s.usb.epOut, numBytes, err)
 		numBytes = -1
 	}
 	return numBytes, err
 }
 
-func (s *scanner) writePacket(packetType int, payLoad []byte) (numBytes int, err error) {
+func (s *Scanner) writePacket(packetType int, payLoad []byte) (numBytes int, err error) {
 	packet := buildCommandPacket(packetType, payLoad)
 	if s.debug == true {
 		fmt.Println("Final Packet: ", packet)
@@ -212,10 +222,10 @@ func (s *scanner) writePacket(packetType int, payLoad []byte) (numBytes int, err
 	return numBytes, err
 }
 
-func (s *scanner) readFragementOnSerial(readSize int) ([]byte, int, error) {
+func (s *Scanner) readFragementOnSerial(readSize int) ([]byte, int, error) {
 
 	buf := make([]byte, readSize)
-	readBytes, err := s.serialPort.Read(buf)
+	readBytes, err := s.serial.port.Read(buf)
 	if err != nil {
 		log.Printf("Error reading Serial Port =>%s\n", err.Error())
 		readBytes = -1
@@ -224,9 +234,9 @@ func (s *scanner) readFragementOnSerial(readSize int) ([]byte, int, error) {
 	return buf, readBytes, err
 }
 
-func (s *scanner) readFragementOnUSB(readSize int) ([]byte, int, error) {
+func (s *Scanner) readFragementOnUSB(readSize int) ([]byte, int, error) {
 	buf := make([]byte, readSize)
-	readBytes, err := s.epIn.Read(buf)
+	readBytes, err := s.usb.epIn.Read(buf)
 	if err != nil {
 		fmt.Println("Read returned an error:", err)
 	} else if readBytes == 0 {
@@ -235,7 +245,7 @@ func (s *scanner) readFragementOnUSB(readSize int) ([]byte, int, error) {
 	return buf, readBytes, err
 }
 
-func (s *scanner) readPacket() (*ThumbPacket, error) {
+func (s *Scanner) readPacket() (*ThumbPacket, error) {
 	var maxReadSize, readBytes int
 	var frag, buf []byte
 	var err error
@@ -319,7 +329,7 @@ func anyCommonErrors(tp *ThumbPacket) (errorFound bool, errorCode int, errDesc e
 	return errorFound, errorCode, errDesc
 }
 
-func (s *scanner) VerifyPassword() (ret bool) {
+func (s *Scanner) VerifyPassword() (ret bool) {
 	ret = true
 	payLoad := getPayloadForVerifyPassword(s.password)
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
@@ -337,7 +347,7 @@ func (s *scanner) VerifyPassword() (ret bool) {
 	return ret
 }
 
-func (s *scanner) SetPassword(password uint) (ret bool) {
+func (s *Scanner) SetPassword(password uint) (ret bool) {
 
 	ret = true
 	s.password = password
@@ -358,17 +368,6 @@ func (s *scanner) SetPassword(password uint) (ret bool) {
 	return ret
 }
 
-//SystemParameters -
-type SystemParameters struct {
-	StatusRegister  uint `struc:"uint16,big"`
-	SystemID        uint `struc:"uint16,big"`
-	StorageCapacity uint `struc:"uint16,big"`
-	SecurityLevel   uint `struc:"uint16,big"`
-	DeviceAddress   uint `struc:"uint32,big"`
-	PacketLength    uint `struc:"uint16,big"`
-	BaudRate        uint `struc:"uint16,big"`
-}
-
 func decodePayload(op interface{}, opBuf []byte) error {
 	var err error
 	buff := bytes.NewBuffer(opBuf[1:])
@@ -380,7 +379,7 @@ func decodePayload(op interface{}, opBuf []byte) error {
 	return err
 }
 
-func (s *scanner) GetSystemParameters() (*SystemParameters, error) {
+func (s *Scanner) GetSystemParameters() (*SystemParameters, error) {
 	var err error
 
 	payLoad := getPayloadForSystemParams()
@@ -403,7 +402,7 @@ func (s *scanner) GetSystemParameters() (*SystemParameters, error) {
 	return result, err
 }
 
-func (s *scanner) ReadImage() (ret bool) {
+func (s *Scanner) ReadImage() (ret bool) {
 	ret = true
 	payLoad := getPayloadForReadImage()
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
@@ -430,7 +429,7 @@ func (s *scanner) ReadImage() (ret bool) {
 	return ret
 }
 
-func (s *scanner) ConvertImage(charBufferNo int) bool {
+func (s *Scanner) ConvertImage(charBufferNo int) bool {
 	var ret bool
 	ret = true
 	payLoad := getPayloadForConvertImage(charBufferNo)
@@ -457,7 +456,7 @@ type SearchResult struct {
 	AccuracyScore  int `struc:"uint16,big"`
 }
 
-func (s *scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error) {
+func (s *Scanner) SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error) {
 	var err error
 	var errorFound bool
 	var errorCode int
@@ -508,7 +507,7 @@ type Accuracy struct {
 	Score int `struc:"uint16,big"`
 }
 
-func (s *scanner) CompareCharacteristics() (int, error) {
+func (s *Scanner) CompareCharacteristics() (int, error) {
 	var errDesc error
 
 	payLoad := getPayloadForCompareCharacteristics()
@@ -534,7 +533,7 @@ func (s *scanner) CompareCharacteristics() (int, error) {
 	return result.Score, errDesc
 }
 
-func (s *scanner) CreateTemplate() error {
+func (s *Scanner) CreateTemplate() error {
 
 	payLoad := getPayloadForCreateTemplate()
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
@@ -556,7 +555,7 @@ func (s *scanner) CreateTemplate() error {
 	return nil
 }
 
-func (s *scanner) getFreePosition() int {
+func (s *Scanner) getFreePosition() int {
 	freePosition := -1
 
 	for page := 0; page <= 3; page++ {
@@ -578,7 +577,7 @@ func (s *scanner) getFreePosition() int {
 }
 
 //StoreTemplate -
-func (s *scanner) StoreTemplate(Position int, CharBufferNo int) (int, error) {
+func (s *Scanner) StoreTemplate(Position int, CharBufferNo int) (int, error) {
 
 	if Position == -1 {
 		Position = s.getFreePosition()
@@ -612,7 +611,7 @@ func (s *scanner) StoreTemplate(Position int, CharBufferNo int) (int, error) {
 	return Position, nil
 }
 
-func (s *scanner) getTemplateIndex(page int) ([]bool, error) {
+func (s *Scanner) getTemplateIndex(page int) ([]bool, error) {
 
 	templateIndex := make([]bool, 0)
 
@@ -645,7 +644,7 @@ func (s *scanner) getTemplateIndex(page int) ([]bool, error) {
 	return templateIndex, nil
 }
 
-func (s *scanner) ClearDatabase() error {
+func (s *Scanner) ClearDatabase() error {
 
 	payLoad := getPayloadForClearDatabase()
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
