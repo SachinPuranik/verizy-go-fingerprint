@@ -32,7 +32,8 @@ func main() {
 		fmt.Println("2 - System Params")
 		fmt.Println("3 - Search")
 		fmt.Println("4 - Enroll")
-		fmt.Println("5 - Clear Database")
+		fmt.Println("5 - Delete template ID - Enter number")
+		fmt.Println("6 - Clear Database")
 		fmt.Println("9 - Exit")
 		//choice = 4
 		switch fmt.Scan(&choice); choice {
@@ -55,6 +56,14 @@ func main() {
 		case 4:
 			Enroll(scanner)
 		case 5:
+			fmt.Println("Enter any number between 1-1000")
+			fmt.Scanln(&choice)
+			if  scanner.DeleteFingerprint(choice , 1) == false {
+				fmt.Println("Failed to delete the fingerid at given position")
+			}else{
+				fmt.Println("Template at given position successfully deleted")
+			}
+		case 6:
 			err := scanner.ClearDatabase()
 			if err != nil {
 				log.Printf(err.Error())
