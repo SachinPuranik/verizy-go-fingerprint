@@ -55,7 +55,7 @@ type ScannerIO interface {
 	VerifyPassword() bool
 	GetSystemParameters() (*SystemParameters, error)
 	ReadImage() bool
-	DeleteFingerprint(position int, count int) bool
+	DeleteFingerprint(position int, count int) (bool, error)
 	ConvertImage(charBufferNo int) bool
 	SearchTemplate(charBufferNo int, startPos int, count int) (*SearchResult, error)
 	CreateTemplate() error
@@ -672,29 +672,31 @@ func (s *scanner) ClearDatabase() error {
 }
 
 //DeleteFingerprint
-func (s *scanner) DeleteFingerprint(position int, count int) bool {
+func (s *scanner) DeleteFingerprint(position int, count int) (bool, error) {
 	var ret bool
-	ret = true
+	ret = false
 
 	if count < 1 {
-		return false
+		return ret, errors.New("minimum count val should be 1")
 	}
 
 	payLoad := getPayloadForDeleteTemplate(position, count)
 	_, errWrite := s.writePacket(FINGERPRINT_COMMANDPACKET, payLoad)
 	if errWrite != nil {
-		ret = false
+		return ret, errors.New("command write failed")
 	}
 
 	tp, errRead := s.readPacket()
 	if errRead != nil {
-		//Handle packet read error
+		return ret, errors.New("device read failed")
 	}
 
 	if errorFound, _, errDesc := anyCommonErrors(tp); errDesc != nil {
 		log.Printf(errDesc.Error())
 		ret = !errorFound
+		return ret, errDesc
+	} else {
+		ret = true
 	}
-
-	return ret
+	return ret, nil
 }

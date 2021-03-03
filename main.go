@@ -58,9 +58,10 @@ func main() {
 		case 5:
 			fmt.Println("Enter any number between 1-1000")
 			fmt.Scanln(&choice)
-			if  scanner.DeleteFingerprint(choice , 1) == false {
-				fmt.Println("Failed to delete the fingerid at given position")
-			}else{
+			result, err := scanner.DeleteFingerprint(choice, 1)
+			if result == false {
+				fmt.Println(err.Error())
+			} else {
 				fmt.Println("Template at given position successfully deleted")
 			}
 		case 6:
